@@ -177,20 +177,8 @@ enp7s2.999@enp7s2 UP             192.168.99.89/29 fe80::be24:11ff:feae:ad50/64
 > ⚠️ 💡 Важно!: Так как VLAN созданы через network внутри Proxmox, обязательно идем в веб панель Proxmox VE, заходим в раздел Server View > Datacenter > pve. В этом разделе в открытом списке выбираем 10103, 10104 машины (HQ-SRV,HQ-CLI), заходим в настройки во вкладку Hardware, меняем в графе Network Device (net6) VLAN tag, с того который там указан (если не указан, то включаем VLAN tag, и прописываем -> 100 для HQ-CLI, и 200 для HQ-SRV.) Перезапускать машины не нужно.
 
 ### HQ-SRV
-⚠️ 💡 Для enp7s1 (/etc/net/ifaces/enp7s1/options) в HQ-RTR, нужно заменить:
 ```bash
-vim /etc/net/ifaces/enp7s1/options 
-BOOTPROTO=dhcp
-TYPE=eth
-CONFIG_WIRELESS=no
-SYSTEMD_BOOTPROTO=dhcp4
-CONFIG_IPV4=yes
-DISABLED=no
-NM_CONTROLLED=no
-SYSTEMD_CONTROLLED=no
-```
-На те параметры что указаны ниже:
-```bash
+vim/etc/net/ifaces/enp0s3/options
 BOOTPROTO=static
 TYPE=eth
 ```
@@ -262,19 +250,9 @@ enp7s2           UP             192.168.3.1/28 fe80::be24:11ff:fea1:62b4/64
 ```
 
 ### BR-SRV
-⚠️ 💡 Для enp7s1 (/etc/net/ifaces/enp7s1/options) в HQ-RTR, нужно заменить:
+
 ```bash
-vim /etc/net/ifaces/enp7s1/options 
-BOOTPROTO=dhcp
-TYPE=eth
-CONFIG_WIRELESS=no
-SYSTEMD_BOOTPROTO=dhcp4
-CONFIG_IPV4=yes
-DISABLED=no
-NM_CONTROLLED=no
-SYSTEMD_CONTROLLED=no
-```
-На те параметры что указаны ниже:
+vim/etc/net/ifaces/enp0s3/options
 ```bash
 BOOTPROTO=static
 TYPE=eth
@@ -329,11 +307,7 @@ systemctl restart network
 ```bash
 apt-get update && apt-get install iptables -y
 
-iptables -t nat -A POSTROUTING -o enp7s1 -s 172.16.1.0/28 -j MASQUERADE
-iptables -t nat -A POSTROUTING -o enp7s1 -s 172.16.2.0/28 -j MASQUERADE
-
-iptables -A FORWARD -i ens19 -o enp7s1 -s 172.16.1.0/28 -j ACCEPT
-iptables -A FORWARD -i ens20 -o enp7s1 -s 172.16.2.0/28 -j ACCEPT
+iptables -t nat -A POSTROUTING -o enp0s3 -j MASQUERADE
 
 iptables-save > /etc/sysconfig/iptables
 systemctl enable iptables --now
@@ -371,117 +345,7 @@ Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
     0     0 MASQUERADE  all  --  *      enp7s1  172.16.1.0/28        0.0.0.0/0           
     0     0 MASQUERADE  all  --  *      enp7s1  172.16.2.0/28        0.0.0.0/0 
 ```
-> [!TIP]
-> ⚠️ 💡 **Примечание!**: Сразу же настроим интернет на всех устройствах, для этого потребуется повтороить настройку на всех устройствах, детали приведены ниже.
 
-### HQ-RTR
-```bash
-vim /etc/net/sysctl.conf
-net.ipv4.ip_forward = 1
-
-sysctl -p
-systemctl restart network
-```
-```bash
-apt-get update && apt-get install iptables -y
-
-iptables -t nat -A POSTROUTING -o enp7s1 -s 192.168.100.0/27 -j MASQUERADE
-iptables -t nat -A POSTROUTING -o enp7s1 -s 192.168.200.64/28 -j MASQUERADE
-iptables -t nat -A POSTROUTING -o enp7s1 -s 192.168.99.88/29 -j MASQUERADE
-
-iptables -A FORWARD -i ens19.10 -o enp7s1 -s 192.168.100.0/27 -j ACCEPT
-iptables -A FORWARD -i ens19.20 -o enp7s1 -s 192.168.200.64/28 -j ACCEPT
-iptables -A FORWARD -i ens19.99 -o enp7s1 -s 192.168.99.88/29 -j ACCEPT
-
-iptables-save > /etc/sysconfig/iptables
-systemctl enable iptables --now
-systemctl restart iptables
-```
-```bash
-systemctl status iptables
-iptables -t nat -L -n -v
-```
-Должны быть такие выводы у команд:
-```bash
-● iptables.service - IPv4 firewall with iptables
-     Loaded: loaded (/lib/systemd/system/iptables.service; enabled; vendor preset: disabled)
-     Active: active (exited) since Tue 2025-12-09 04:10:30 UTC; 4s ago
-    Process: 8484 ExecStart=/etc/init.d/iptables start (code=exited, status=0/SUCCESS)
-   Main PID: 8484 (code=exited, status=0/SUCCESS)
-        CPU: 11ms
-
-Dec 09 04:10:30 hq-rtr.au-team.irpo systemd[1]: Starting IPv4 firewall with iptables...
-Dec 09 04:10:30 hq-rtr.au-team.irpo iptables[8498]: Applying iptables firewall rules: succeeded
-Dec 09 04:10:30 hq-rtr.au-team.irpo iptables[8484]: Applying iptables firewall rules: [ DONE ]
-Dec 09 04:10:30 hq-rtr.au-team.irpo systemd[1]: Finished IPv4 firewall with iptables.
-
-Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-
-Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-
-Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-
-Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-    0     0 MASQUERADE  all  --  *      enp7s1  192.168.100.0/27     0.0.0.0/0           
-    0     0 MASQUERADE  all  --  *      enp7s1  192.168.200.64/28    0.0.0.0/0           
-    0     0 MASQUERADE  all  --  *      enp7s1  192.168.99.88/29     0.0.0.0/0
-```
-### BR-RTR
-```bash
-vim /etc/net/sysctl.conf
-net.ipv4.ip_forward = 1
-
-sysctl -p
-systemctl restart network
-```
-```bash
-apt-get update && apt-get install iptables -y
-
-iptables -t nat -A POSTROUTING -o enp7s1 -s 192.168.3.0/28 -j MASQUERADE
-iptables -A FORWARD -i ens19 -o enp7s1 -s 192.168.3.0/28 -j ACCEPT
-
-iptables-save > /etc/sysconfig/iptables
-
-systemctl enable iptables --now
-systemctl restart iptables
-```
-```bash
-systemctl status iptables
-iptables -t nat -L -n -v
-```
-Должны быть такие выводы у команд:
-```bash
-● iptables.service - IPv4 firewall with iptables
-     Loaded: loaded (/lib/systemd/system/iptables.service; enabled; vendor preset: disabled)
-     Active: active (exited) since Tue 2025-12-09 04:12:17 UTC; 5s ago
-    Process: 7872 ExecStart=/etc/init.d/iptables start (code=exited, status=0/SUCCESS)
-   Main PID: 7872 (code=exited, status=0/SUCCESS)
-        CPU: 11ms
-
-Dec 09 04:12:17 br-rtr.au-team.irpo systemd[1]: Starting IPv4 firewall with iptables...
-Dec 09 04:12:17 br-rtr.au-team.irpo iptables[7887]: Applying iptables firewall rules: succeeded
-Dec 09 04:12:17 br-rtr.au-team.irpo iptables[7872]: Applying iptables firewall rules: [ DONE ]
-Dec 09 04:12:17 br-rtr.au-team.irpo systemd[1]: Finished IPv4 firewall with iptables.
-
-Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-
-Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-
-Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-
-Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination         
-    0     0 MASQUERADE  all  --  *      enp7s1  192.168.3.0/28       0.0.0.0/0 
-```
-> [!IMPORTANT] 
->⚠️ **Важно**: На данном этапе уже должен работать выход в Интернет на всех устройствах (кроме HQ-CLI, его настроим позже по DHCP), а также пинг между ними. Если что-то не работает, значит где-то ошибка.
 
 ## 📋 Задание 11: Настройте часовой пояс на всех устройствах (за исключением виртуального коммутатора, в случае его использования) согласно месту проведения экзамена.
 
