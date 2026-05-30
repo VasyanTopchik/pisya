@@ -1,34 +1,71 @@
-# 🛠️ Руководство по выполнению демонстрационного экзамена CCA-2026
+isp 
+enp7s2 = 172.16.1.1/28
+192.168.100.0/27 via 172.16.1.1
+192.168.200.0/28 via 172.16.1.1
+192.168.99.0/29 via 172.16.1.1
 
-## Общие требования
-- **Время выполнения:** 2 часа 30 минут (1 модуль = 1 час, 2 модуль = 1.5 часа)
-- **Оборудование:** 10 серверных/Just OS машин (Alt JeOS, Alt Server), 2 клиентские машины (Alt Workstation), в моем случае все выполнялось на развернутом Proxmox внутри VMware Workstation.
+enp7s3 = 172.16.2.1/28
+192.168.3.0/28 via 172.16.2.1
 
---- 
 
-# Модуль 1: Сетевое администрирование (1 час)
 
-## 📋 Задание 1: Произведите базовую настройку устройств. + Задание 4: Настройте коммутацию в сегменте HQ.
+hq rtr 
+enp7s1 = 172.16.1.2/28
 
-**Задание 1**: 
-- Настройте имена устройств согласно топологии. Используйте полное доменное имя.
-- На всех устройствах необходимо сконфигурировать IPv4.
-- IP-адрес должен быть из приватного диапазона, в случае, если сеть локальная, согласно RFC1918.
-- Локальная сеть в сторону HQ-SRV(VLAN 100) должна вмещать не более 32 адресов.
-- Локальная сеть в сторону HQ-CLI(VLAN 200) должна вмещать не менее 16 адресов.
-- Локальная сеть для управления(VLAN 999) должна вмещать не более 8 адресов.
-- Локальная сеть в сторону BR-SRV должна вмещать не более 16 адресов.
-- Сведения об адресах занесите в таблицу 2, в качестве примера используйте Прил_3_О1_КОД 09.02.06-1-2026-М1.
-  
-**Задание 4**:
-- Трафик HQ-SRV должен принадлежать VLAN 100.
-- Трафик HQ-CLI должен принадлежать VLAN 200.
-- Предусмотреть возможность передачи трафика управления в VLAN 999.
-- Реализовать на HQ-RTR маршрутизацию трафика всех указанных VLAN использованием одного сетевого адаптера ВМ/физического порта.
-- Сведения о настройке коммутации внесите в отчёт.
+enp7s2 = pustoi vlan
+enp7s2.100 = 192.168.100.1/27
+enp7s2.200 = 192.168.200.65/28
+enp7s3.999 = 192.168.99.89/29
 
-## Выполнение:
-### Настройка hostname.
+enp7s3 = 192.168.100.3/27
+def via 172.16.1.1
+
+
+
+
+hq srv
+enp7s1 = 192.168.100.2/27
+def via 192.168.100.3
+
+
+br rtr 
+
+enp7s1 = 172.16.2.2/28
+
+enp7s2 = 192.168.3.1/28
+def via 172.16.2.1
+
+
+
+br srv 
+enp7s1 = 192.168.3.2/28
+def via 192.168.3.1
+
+
+
+
+
+
+GRE TUNNEL HQ RTR & BR RTR
+
+mkdir /etc/net/ifaces/gre1
+vim /etc/net/ifaces/gre1/options
+
+TUNLOCAL=172.16.1.1
+TUNREMOTE=172.16.2.1
+TUNTYPE=gre
+TYPE=iptun
+TUNOPTIONS="ttl 64" 
+
+vim /etc/net/ifaces/gre1/ipv4address
+10.10.0.3 peer 10.10.0.1/30
+
+NA BR-RTR PISHETE NAOBOROT
+
+
+
+
+ hostname.
 ### ISP
 ```bash
 hostnamectl set-hostname isp.au-team.irpo; exec bash
@@ -307,7 +344,7 @@ systemctl restart network
 ```bash
 apt-get update && apt-get install iptables -y
 
-iptables -t nat -A POSTROUTING -o enp0s3 -j MASQUERADE
+iptables -t nat -A POSTROUTING -o enp7s1 -j MASQUERADE
 
 iptables-save > /etc/sysconfig/iptables
 systemctl enable iptables --now
@@ -542,72 +579,7 @@ Last login: Tue Dec  9 23:03:21 2025
 - На выбор технологии GRE или IP in IP.
 - Сведения о туннеле занесите в отчёт. (Отчет будет приложен отдельным [файлом](./report_2026.odt))
 
-### HQ-RTR
-```bash
-mkdir /etc/net/ifaces/gre1
-```
-```bash
-vim /etc/net/ifaces/gre1/options
-TYPE=iptun
-TUNTYPE=gre
-TUNLOCAL=172.16.1.2
-TUNREMOTE=172.16.2.2
-TUNOPTIONS='ttl 64'
-```
-```bash
-vim /etc/net/ifaces/gre1/ipv4address
-10.10.0.1/30
-```
-```bash
-systemctl restart network
-ip -c -br a
-```
-Если все сделано верно получаем следующий вывод:
-```bash
-lo               UNKNOWN        127.0.0.1/8 ::1/128 
-enp7s1           UP             172.16.1.2/28 fe80::be24:11ff:feda:daba/64 
-enp7s2           UP             fe80::be24:11ff:feae:ad50/64 
-enp7s2.100@enp7s2 UP             192.168.100.1/27 fe80::be24:11ff:feae:ad50/64 
-enp7s2.200@enp7s2 UP             192.168.200.65/28 fe80::be24:11ff:feae:ad50/64 
-enp7s2.999@enp7s2 UP             192.168.99.89/29 fe80::be24:11ff:feae:ad50/64 
-gre0@NONE        DOWN           
-gretap0@NONE     DOWN           
-erspan0@NONE     DOWN           
-gre1@NONE        UNKNOWN        10.10.0.1/30 fe80::ac10:102/64 
-```
 
-### BR-RTR
-```bash
-mkdir /etc/net/ifaces/gre1
-```
-```bash
-vim /etc/net/ifaces/gre1/options
-TYPE=iptun
-TUNTYPE=gre
-TUNLOCAL=172.16.2.2
-TUNREMOTE=172.16.1.2
-TUNOPTIONS='ttl 64'
-```
-```bash
-vim /etc/net/ifaces/gre1/ipv4address
-10.10.0.2/30
-```
-```bash
-systemctl restart network
-ip -c -br a
-```
-Если все сделано верно получаем следующий вывод:
-```bash
-lo               UNKNOWN        127.0.0.1/8 ::1/128 
-enp7s1           UP             172.16.2.2/28 fe80::be24:11ff:fe33:b6b2/64 
-enp7s2           UP             192.168.3.1/28 fe80::be24:11ff:fea1:62b4/64 
-gre0@NONE        DOWN           
-gretap0@NONE     DOWN           
-erspan0@NONE     DOWN           
-gre1@NONE        UNKNOWN        10.10.0.2/30 fe80::ac10:202/64 
-```
-> [!NOTE]
-> **Проверка**: Проверяем работоспобность пингуя по туннелю с 10.10.0.1 на 10.10.0.2 и обратно.
 
 ## 📋 Задание 7: Обеспечьте динамическую маршрутизацию: ресурсы одного офиса должны быть доступны из другого офиса. Для обеспечения динамической маршрутизации используйте link state протокол на ваше усмотрение.
 
